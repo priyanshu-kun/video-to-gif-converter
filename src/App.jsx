@@ -1,38 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 import './App.css';
 
+const ffmpeg = createFFmpeg({ log: true });
+
 function App() {
-  // Create the count state.
-  const [count, setCount] = useState(0);
-  // Create the counter (+1 every second).
+  const [ready, setReady] = useState(false);
+  const [video, setVideo] = useState(undefined);
+  const [gif, setGif] = useState();
+
+  const load = async () => {
+    await ffmpeg.load();
+    setReady(true);
+  };
+
+  const convertGif = async () => {
+    // read file in webassembly file system - OK, that's intersting but if you want to use this utility you must need to know webassembly file system. link to ffmpeg webassembly docs: https://ffmpegwasm.github.io/
+    await ffmpeg.FS('writeFile', 'test.mp4', await fetchFile(video));
+
+    // Run ffmpeg command line utlity
+    await ffmpeg.run(
+      '-i',
+      'test.mp4',
+      '-t',
+      '3.5',
+      '-ss',
+      '2.0',
+      '-f',
+      'gif',
+      'out.gif',
+    );
+
+    // read a file in file system
+    const data = await ffmpeg.FS('readFile', 'out.gif');
+
+    // create URL of raw data
+    const url = URL.createObjectURL(new Blob([data.buffer]), {
+      type: 'image/gif',
+    });
+
+    console.log('Gif URL: ', url);
+
+    // update the state of components
+    setGif(url);
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => setCount(count + 1), 1000);
-    return () => clearTimeout(timer);
-  }, [count, setCount]);
-  // Return the App component.
-  return (
+    load();
+  }, []);
+
+  return ready ? (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.jsx</code> and save to reload.
-        </p>
-        <p>
-          Page has been open for <code>{count}</code> seconds.
-        </p>
-        <p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </p>
-      </header>
+      {video && (
+        <div>
+          <video controls width="500" src={URL.createObjectURL(video)}></video>
+        </div>
+      )}
+      <input type="file" onChange={(e) => setVideo(e.target.files?.item(0))} />
+
+      <h3>Result</h3>
+      <button onClick={convertGif}>Convert to gif</button>
+      {gif && <img src={gif} alt="resulted gif" width="500" />}
+      {gif && (
+        <a href={gif} download>
+          <button>Download file</button>
+        </a>
+      )}
     </div>
+  ) : (
+    <h1>Loading...</h1>
   );
 }
 
